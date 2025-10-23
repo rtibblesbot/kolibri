@@ -100,6 +100,7 @@
                   <KDropdownMenu
                     :options="getManageUserOptions(content.id)"
                     @select="handleManageUserAction($event, content)"
+                    @close="activeRowId = null"
                   />
                 </slot>
               </template>

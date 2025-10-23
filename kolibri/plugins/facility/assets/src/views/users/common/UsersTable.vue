@@ -100,7 +100,7 @@
                   <KDropdownMenu
                     :options="getManageUserOptions(content.id)"
                     @select="handleManageUserAction($event, content)"
-                    @close="activeRowId = null"
+                    @close="handleDropdownClose"
                   />
                 </slot>
               </template>
@@ -449,6 +449,7 @@
       };
 
       const handleManageUserAction = (action, user) => {
+        activeRowId.value = null; // Clear active state when action is selected
         if (action.value === Modals.EDIT_USER) {
           const link = cloneDeep(store.getters.facilityPageLinks.UserEditPage);
           link.params.id = user.id;
@@ -461,6 +462,13 @@
 
       const handleSelectedButtonState = userId => {
         activeRowId.value = activeRowId.value === userId ? null : userId;
+      };
+
+      const handleDropdownClose = () => {
+        // Use nextTick to ensure the menu is fully closed before clearing the active state
+        currentInstance.proxy.$nextTick(() => {
+          activeRowId.value = null;
+        });
       };
 
       const { windowBreakpoint } = useKResponsiveWindow();
@@ -494,6 +502,7 @@
         getManageUserOptions,
         handleManageUserAction,
         handleSelectedButtonState,
+        handleDropdownClose,
 
         // Strings
         coreStrings,

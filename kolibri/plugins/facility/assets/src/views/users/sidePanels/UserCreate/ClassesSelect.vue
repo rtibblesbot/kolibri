@@ -1,10 +1,10 @@
 <template>
 
   <KSelect
+    v-model="selectValue"
     multiple
     :label="fieldLabel"
     :options="selectOptions"
-    :value="selectValue"
     :disabled="disabled"
     :truncateOptionsLabel="false"
     @select="onSelect"

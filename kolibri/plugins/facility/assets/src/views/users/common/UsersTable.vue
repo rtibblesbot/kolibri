@@ -89,7 +89,7 @@
             <KIconButton
               icon="optionsVertical"
               :disabled="!userCanBeEdited(content)"
-              :style="activeRowId === row[0].id ? { backgroundColor: $themePalette.grey.v_200 } : {}"
+              :style="activeRowId === row[0].id ? { backgroundColor: 'rgba(0,0,0,.1)' } : {}"
               @click="handleSelectedButtonState(row[0].id)"
             >
               <template #menu>

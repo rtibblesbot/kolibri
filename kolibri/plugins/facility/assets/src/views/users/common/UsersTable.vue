@@ -89,6 +89,8 @@
             <KIconButton
               icon="optionsVertical"
               :disabled="!userCanBeEdited(content)"
+              :style="activeRowId === row[0].id ? { backgroundColor: $themePalette.grey.v_200 } : {}"
+              @click="handleSelectedButtonState(row[0].id)"
             >
               <template #menu>
                 <slot
@@ -178,6 +180,7 @@
       const { facilityUsers } = toRefs(props);
       const modalShown = ref(null);
       const userToChange = ref(null);
+      const activeRowId = ref(null);
 
       const { selectAllLabel$ } = enhancedQuizManagementStrings;
       const {
@@ -455,6 +458,10 @@
         }
       };
 
+      const handleSelectedButtonState = userId => {
+        activeRowId.value = activeRowId.value === userId ? null : userId;
+      };
+
       const { windowBreakpoint } = useKResponsiveWindow();
       const stickyColumns = computed(() => [
         windowBreakpoint.value <= 2 ? 'first' : 'firstTwo',
@@ -472,6 +479,7 @@
         userToChange,
         userToChangeSet,
         stickyColumns,
+        activeRowId,
 
         // Methods
         handleSelectAllToggle,
@@ -484,6 +492,7 @@
         closeModal,
         getManageUserOptions,
         handleManageUserAction,
+        handleSelectedButtonState,
 
         // Strings
         coreStrings,

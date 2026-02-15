@@ -315,7 +315,7 @@ class GetContentNodesDataTestCase(TestCase):
     c2c1_node_id = "2b6926ed22025518a8b9da91745b51d3"
 
     def test_default_arguments(self):
-        (total_resource_count, files, total_bytes_to_transfer) = get_content_nodes_data(
+        total_resource_count, files, total_bytes_to_transfer = get_content_nodes_data(
             self.the_channel_id, [], available=True
         )
 
@@ -371,7 +371,7 @@ class GetContentNodesDataTestCase(TestCase):
             channel_id=self.the_channel_id, pk__in=include_node_ids
         ).exclude(kind=content_kinds.TOPIC)
 
-        (total_resource_count, files, total_bytes_to_transfer) = get_content_nodes_data(
+        total_resource_count, files, total_bytes_to_transfer = get_content_nodes_data(
             self.the_channel_id, [selected_content_nodes], available=True
         )
 
@@ -422,7 +422,7 @@ class GetContentNodesDataTestCase(TestCase):
             channel_id=self.the_channel_id, pk=self.c2c1_node_id
         ).exclude(kind=content_kinds.TOPIC)
 
-        (total_resource_count, files, total_bytes_to_transfer) = get_content_nodes_data(
+        total_resource_count, files, total_bytes_to_transfer = get_content_nodes_data(
             self.the_channel_id,
             [selected_content_nodes],
             available=True,
@@ -462,7 +462,7 @@ class GetContentNodesDataTestCase(TestCase):
             },
         ]
 
-        (total_resource_count, files, total_bytes_to_transfer) = get_content_nodes_data(
+        total_resource_count, files, total_bytes_to_transfer = get_content_nodes_data(
             self.the_channel_id,
             [],
             available=True,
@@ -474,7 +474,7 @@ class GetContentNodesDataTestCase(TestCase):
         self.assertEqual(total_bytes_to_transfer, 5)
 
     def test_empty_query(self):
-        (total_resource_count, files, total_bytes_to_transfer) = get_content_nodes_data(
+        total_resource_count, files, total_bytes_to_transfer = get_content_nodes_data(
             self.the_channel_id, [ContentNode.objects.none()], available=True
         )
 

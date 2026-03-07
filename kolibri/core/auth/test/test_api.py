@@ -31,6 +31,7 @@ from .. import models
 from ..constants import role_kinds
 from ..constants.facility_presets import mappings
 from ..models import Facility
+from ..serializers import _prepare_for_bulk_create
 from .helpers import create_superuser
 from .helpers import DUMMY_PASSWORD
 from .helpers import provision_device
@@ -2242,6 +2243,10 @@ class MembershipAPITestCase(APITestCase):
         # create other user memberships
         models.Membership.objects.create(collection=cls.classroom, user=cls.other_user)
         models.Membership.objects.create(collection=cls.lg, user=cls.other_user)
+        # users for bulk create tests (no pre-existing memberships)
+        cls.bulk_user1 = FacilityUserFactory.create(facility=cls.facility)
+        cls.bulk_user2 = FacilityUserFactory.create(facility=cls.facility)
+        cls.bulk_user3 = FacilityUserFactory.create(facility=cls.facility)
 
     def login_superuser(self):
         self.client.login(
@@ -2351,6 +2356,76 @@ class MembershipAPITestCase(APITestCase):
             models.Membership.objects.filter(user=self.other_user).count(),
             expected_count,
         )
+
+    def test_bulk_create_memberships(self):
+        self.login_superuser()
+        url = reverse("kolibri:core:membership-list")
+        data = [
+            {"user": self.bulk_user1.id, "collection": self.classroom.id},
+            {"user": self.bulk_user2.id, "collection": self.classroom.id},
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.data), 2)
+        self.assertTrue(
+            models.Membership.objects.filter(
+                user=self.bulk_user1, collection=self.classroom
+            ).exists()
+        )
+        self.assertTrue(
+            models.Membership.objects.filter(
+                user=self.bulk_user2, collection=self.classroom
+            ).exists()
+        )
+
+    def test_bulk_create_memberships_have_valid_morango_fields(self):
+        self.login_superuser()
+        url = reverse("kolibri:core:membership-list")
+        data = [
+            {"user": self.bulk_user1.id, "collection": self.classroom.id},
+            {"user": self.bulk_user2.id, "collection": self.classroom.id},
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        for m_data in response.data:
+            membership = models.Membership.objects.get(id=m_data["id"])
+            self.assertEqual(len(membership.id), 32)
+            self.assertIsNotNone(membership._morango_partition)
+            self.assertIsNotNone(membership._morango_source_id)
+            self.assertTrue(membership._morango_dirty_bit)
+
+    def test_bulk_create_memberships_idempotent(self):
+        self.login_superuser()
+        models.Membership.objects.create(
+            user=self.bulk_user1, collection=self.classroom
+        )
+        url = reverse("kolibri:core:membership-list")
+        data = [
+            {"user": self.bulk_user1.id, "collection": self.classroom.id},
+            {"user": self.bulk_user2.id, "collection": self.classroom.id},
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["user"], self.bulk_user2.id)
+
+    def test_bulk_create_learnergroup_membership_requires_classroom_membership(self):
+        self.login_superuser()
+        url = reverse("kolibri:core:membership-list")
+        data = [
+            {"user": self.bulk_user3.id, "collection": self.lg.id},
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_bulk_create_facility_membership_rejected(self):
+        self.login_superuser()
+        url = reverse("kolibri:core:membership-list")
+        data = [
+            {"user": self.bulk_user1.id, "collection": self.facility.id},
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 400)
 
 
 class GroupMembership(APITestCase):
@@ -2768,3 +2843,218 @@ class RemoteAccessSessionTestCase(APITestCase):
         mock_interface.enabled = False
         response = self._login()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class RoleAPITestCase(APITestCase):
+    databases = "__all__"
+
+    @classmethod
+    def setUpTestData(cls):
+        provision_device()
+        cls.facility = FacilityFactory.create()
+        cls.superuser = create_superuser(cls.facility)
+        cls.classroom = ClassroomFactory.create(parent=cls.facility)
+        cls.lg = LearnerGroupFactory.create(parent=cls.classroom)
+        cls.user1 = FacilityUserFactory.create(facility=cls.facility)
+        cls.user2 = FacilityUserFactory.create(facility=cls.facility)
+
+    def setUp(self):
+        self.client.login(
+            username=self.superuser.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+
+    def test_bulk_create_multiple_roles(self):
+        url = reverse("kolibri:core:role-list")
+        data = [
+            {
+                "user": self.user1.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+            {
+                "user": self.user2.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.data), 2)
+        self.assertTrue(
+            models.Role.objects.filter(
+                user=self.user1, collection=self.classroom, kind=role_kinds.COACH
+            ).exists()
+        )
+        self.assertTrue(
+            models.Role.objects.filter(
+                user=self.user2, collection=self.classroom, kind=role_kinds.COACH
+            ).exists()
+        )
+
+    def test_bulk_create_duplicate_roles_idempotent(self):
+        models.Role.objects.create(
+            user=self.user1, collection=self.classroom, kind=role_kinds.COACH
+        )
+        url = reverse("kolibri:core:role-list")
+        data = [
+            {
+                "user": self.user1.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+            {
+                "user": self.user2.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        # Only the new role should be in the response
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["user"], self.user2.id)
+
+    def test_bulk_create_classroom_coach_creates_assignable_coach_role(self):
+        url = reverse("kolibri:core:role-list")
+        data = [
+            {
+                "user": self.user1.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(
+            models.Role.objects.filter(
+                user=self.user1,
+                collection=self.facility,
+                kind=role_kinds.ASSIGNABLE_COACH,
+            ).exists()
+        )
+
+    def test_bulk_create_classroom_coach_no_duplicate_assignable_coach(self):
+        # User already has a facility role
+        models.Role.objects.create(
+            user=self.user1, collection=self.facility, kind=role_kinds.ADMIN
+        )
+        url = reverse("kolibri:core:role-list")
+        data = [
+            {
+                "user": self.user1.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(
+            models.Role.objects.filter(
+                user=self.user1,
+                collection=self.facility,
+                kind=role_kinds.ASSIGNABLE_COACH,
+            ).exists()
+        )
+
+    def test_bulk_create_facility_admin_roles(self):
+        url = reverse("kolibri:core:role-list")
+        data = [
+            {
+                "user": self.user1.id,
+                "collection": self.facility.id,
+                "kind": role_kinds.ADMIN,
+            },
+            {
+                "user": self.user2.id,
+                "collection": self.facility.id,
+                "kind": role_kinds.ADMIN,
+            },
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.data), 2)
+        self.assertTrue(
+            models.Role.objects.filter(
+                user=self.user1, collection=self.facility, kind=role_kinds.ADMIN
+            ).exists()
+        )
+        self.assertTrue(
+            models.Role.objects.filter(
+                user=self.user2, collection=self.facility, kind=role_kinds.ADMIN
+            ).exists()
+        )
+
+    def test_bulk_create_roles_have_valid_morango_fields(self):
+        url = reverse("kolibri:core:role-list")
+        data = [
+            {
+                "user": self.user1.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+            {
+                "user": self.user2.id,
+                "collection": self.classroom.id,
+                "kind": role_kinds.COACH,
+            },
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 201)
+        for role_data in response.data:
+            role = models.Role.objects.get(id=role_data["id"])
+            self.assertEqual(len(role.id), 32)
+            self.assertIsNotNone(role._morango_partition)
+            self.assertIsNotNone(role._morango_source_id)
+            self.assertTrue(role._morango_dirty_bit)
+
+    def test_bulk_create_learnergroup_role_rejected(self):
+        url = reverse("kolibri:core:role-list")
+        data = [
+            {
+                "user": self.user1.id,
+                "collection": self.lg.id,
+                "kind": role_kinds.COACH,
+            },
+        ]
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, 400)
+
+
+class PrepareForBulkCreateTestCase(APITestCase):
+    databases = "__all__"
+
+    @classmethod
+    def setUpTestData(cls):
+        provision_device()
+        cls.facility = FacilityFactory.create()
+
+    def test_sets_morango_fields_on_role(self):
+        user = FacilityUserFactory.create(facility=self.facility)
+        classroom = ClassroomFactory.create(parent=self.facility)
+        role = models.Role(user=user, collection=classroom, kind=role_kinds.COACH)
+        _prepare_for_bulk_create(role)
+        self.assertEqual(len(role.id), 32)
+        self.assertIsNotNone(role._morango_partition)
+        self.assertIsNotNone(role._morango_source_id)
+        self.assertTrue(role._morango_dirty_bit)
+
+    def test_sets_morango_fields_on_membership(self):
+        user = FacilityUserFactory.create(facility=self.facility)
+        classroom = ClassroomFactory.create(parent=self.facility)
+        membership = models.Membership(user=user, collection=classroom)
+        _prepare_for_bulk_create(membership)
+        self.assertEqual(len(membership.id), 32)
+        self.assertIsNotNone(membership._morango_partition)
+        self.assertIsNotNone(membership._morango_source_id)
+        self.assertTrue(membership._morango_dirty_bit)
+
+    def test_uuid_is_deterministic(self):
+        user = FacilityUserFactory.create(facility=self.facility)
+        classroom = ClassroomFactory.create(parent=self.facility)
+        role1 = models.Role(user=user, collection=classroom, kind=role_kinds.COACH)
+        role2 = models.Role(user=user, collection=classroom, kind=role_kinds.COACH)
+        _prepare_for_bulk_create(role1)
+        _prepare_for_bulk_create(role2)
+        self.assertEqual(role1.id, role2.id)

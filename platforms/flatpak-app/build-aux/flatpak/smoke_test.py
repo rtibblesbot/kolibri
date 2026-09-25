@@ -406,7 +406,7 @@ def phase_learn():
         "sigterm-restarted": _sigterm_restarts_kolibri(),
     }
     print(
-        f"  provisioned={not PROVISION_FILE.exists()} "
+        f"::notice title=phase_learn::provisioned={not PROVISION_FILE.exists()} "
         + " ".join(f"{name}={passed}" for name, passed in checks.items()),
         flush=True,
     )

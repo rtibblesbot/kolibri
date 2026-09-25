@@ -76,7 +76,7 @@ class _DBusPlugin(SimplePlugin):
         self.__provisioned_monitor.subscribe()
 
     def start(self):
-        self.__commands.put("RUN")
+        self.__commands.put("START")
 
     def stop(self):
         self.__commands.put("IDLE")

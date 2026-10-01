@@ -49,15 +49,12 @@ This will build the debian file into the `dist` folder.
 
 ### Running tests
 
-Install the project with test dependencies:
+After `uv sync --group dev --all-packages` at the repository root, run from `platforms/debian`:
 ```
-pip install -e ".[test]"
+uv run python -O -m pytest
 ```
 
-Then run:
-```
-python3 -m pytest tests/ -v
-```
+CI runs these as the `debian` row of the `platform_tests` job in `.github/workflows/tox.yml`. Linting runs through the monorepo's prek configuration — see the repository `AGENTS.md`.
 
 ### Building sources
 

@@ -376,6 +376,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: debian
+            working-directory: platforms/debian
+            python-version: "3.10"
+            system-packages: distro-info
           - name: debian-server
             working-directory: platforms/debian-server
             python-version: "3.10"

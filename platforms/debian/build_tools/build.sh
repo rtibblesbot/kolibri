@@ -166,4 +166,3 @@ else
     # build with unsigned source, changes and gzip compression
     dpkg-buildpackage -A -Zgzip -z3 -us -uc
 fi
-

@@ -5,23 +5,19 @@ those packages installed.
 """
 
 import ssl
+from unittest.mock import MagicMock
+from unittest.mock import patch
+from unittest.mock import PropertyMock
 
-from unittest.mock import MagicMock, patch, PropertyMock
 import pytest
 
-from scripts.launchpad_copy import (
-    get_current_series,
-    get_supported_series,
-    LaunchpadWrapper,
-    PACKAGE_WHITELIST,
-    PROPOSED_PPA_NAME,
-    RELEASE_PPA_NAME,
-    SOURCE_PACKAGE_NAME,
-    BINARY_PACKAGE_NAME,
-    POCKET,
-    build_parser,
-)
-
+from scripts.launchpad_copy import BINARY_PACKAGE_NAME
+from scripts.launchpad_copy import build_parser
+from scripts.launchpad_copy import get_current_series
+from scripts.launchpad_copy import get_supported_series
+from scripts.launchpad_copy import LaunchpadWrapper
+from scripts.launchpad_copy import PROPOSED_PPA_NAME
+from scripts.launchpad_copy import SOURCE_PACKAGE_NAME
 
 # --- Series discovery tests ---
 
@@ -86,8 +82,12 @@ class TestGetSupportedSeries:
 # --- Helper to build a mock LaunchpadWrapper ---
 
 
-def make_mock_source(status="Published", series_name="noble", name="kolibri-source",
-                     version="0.19.3-0ubuntu1"):
+def make_mock_source(
+    status="Published",
+    series_name="noble",
+    name="kolibri-source",
+    version="0.19.3-0ubuntu1",
+):
     """Create a mock source publication."""
     source = MagicMock()
     source.status = status
@@ -117,7 +117,9 @@ def make_wrapper_with_mock_lp():
 
     mock_lp.people.__getitem__ = MagicMock(return_value=mock_owner)
     mock_owner.getPPAByName = MagicMock(
-        side_effect=lambda name: mock_proposed if name == PROPOSED_PPA_NAME else mock_release
+        side_effect=lambda name: (
+            mock_proposed if name == PROPOSED_PPA_NAME else mock_release
+        )
     )
     mock_proposed.distribution.getSeries = MagicMock(return_value=mock_series)
 
@@ -128,6 +130,18 @@ def make_wrapper_with_mock_lp():
     type(wrapper).release_ppa = PropertyMock(return_value=mock_release)
 
     return wrapper, mock_proposed, mock_release, mock_series
+
+
+def test_get_series_fetches_each_series_once():
+    wrapper, mock_proposed, _, _ = make_wrapper_with_mock_lp()
+    get_series = mock_proposed.distribution.getSeries
+
+    first = wrapper.get_series("noble")
+    second = wrapper.get_series("noble")
+    wrapper.get_series("jammy")
+
+    assert get_series.call_count == 2
+    assert first is second
 
 
 # --- check_source tests ---
@@ -278,7 +292,9 @@ class TestCopyToSeries:
             )
         )
         wrapper.get_builds_for_source = MagicMock(return_value=[noble_build])
-        mock_ppa.syncSources.side_effect = Exception("same version already published in focal")
+        mock_ppa.syncSources.side_effect = Exception(
+            "same version already published in focal"
+        )
 
         result = wrapper.copy_to_series()
 
@@ -324,14 +340,18 @@ class TestWaitForPublished:
 
         mock_binary = MagicMock()
         mock_binary.status = "Published"
-        mock_binary.distro_arch_series_link = "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        mock_binary.distro_arch_series_link = (
+            "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        )
         mock_ppa.getPublishedBinaries.return_value = [mock_binary]
 
         wrapper.get_ppa = MagicMock(return_value=mock_ppa)
 
         result = wrapper.wait_for_published(
             "0.19.3-0ubuntu1",
-            series=["noble"], timeout=5, interval=1,
+            series=["noble"],
+            timeout=5,
+            interval=1,
         )
 
         assert result == 0
@@ -350,7 +370,9 @@ class TestWaitForPublished:
         mock_ppa.getPublishedSources.return_value = [source]
         mock_binary = MagicMock()
         mock_binary.status = "Published"
-        mock_binary.distro_arch_series_link = "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        mock_binary.distro_arch_series_link = (
+            "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        )
         mock_ppa.getPublishedBinaries.return_value = [mock_binary]
         wrapper.get_ppa = MagicMock(return_value=mock_ppa)
 
@@ -358,8 +380,14 @@ class TestWaitForPublished:
         result = wrapper.wait_for_published("0.19.3-0ubuntu1", timeout=5, interval=1)
 
         assert result == 0
-        assert mock_ppa.getPublishedSources.call_args.kwargs["source_name"] == SOURCE_PACKAGE_NAME
-        assert mock_ppa.getPublishedBinaries.call_args.kwargs["binary_name"] == BINARY_PACKAGE_NAME
+        assert (
+            mock_ppa.getPublishedSources.call_args.kwargs["source_name"]
+            == SOURCE_PACKAGE_NAME
+        )
+        assert (
+            mock_ppa.getPublishedBinaries.call_args.kwargs["binary_name"]
+            == BINARY_PACKAGE_NAME
+        )
 
     def test_returns_1_on_timeout(self):
         wrapper, mock_ppa, _, _ = make_wrapper_with_mock_lp()
@@ -372,7 +400,9 @@ class TestWaitForPublished:
 
         result = wrapper.wait_for_published(
             "0.19.3-0ubuntu1",
-            series=["noble"], timeout=1, interval=1,
+            series=["noble"],
+            timeout=1,
+            interval=1,
         )
 
         assert result == 1
@@ -386,16 +416,22 @@ class TestWaitForPublished:
 
         noble_binary = MagicMock()
         noble_binary.status = "Published"
-        noble_binary.distro_arch_series_link = "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        noble_binary.distro_arch_series_link = (
+            "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        )
         jammy_binary = MagicMock()
         jammy_binary.status = "Published"
-        jammy_binary.distro_arch_series_link = "https://api.launchpad.net/devel/ubuntu/jammy/amd64"
+        jammy_binary.distro_arch_series_link = (
+            "https://api.launchpad.net/devel/ubuntu/jammy/amd64"
+        )
         mock_ppa.getPublishedBinaries.return_value = [noble_binary, jammy_binary]
 
         wrapper.get_ppa = MagicMock(return_value=mock_ppa)
 
         result = wrapper.wait_for_published(
-            "0.19.3-0ubuntu1", timeout=5, interval=1,
+            "0.19.3-0ubuntu1",
+            timeout=5,
+            interval=1,
         )
 
         assert result == 0
@@ -409,7 +445,9 @@ class TestWaitForPublished:
 
         noble_binary = MagicMock()
         noble_binary.status = "Published"
-        noble_binary.distro_arch_series_link = "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        noble_binary.distro_arch_series_link = (
+            "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        )
         mock_ppa.getPublishedBinaries.return_value = [noble_binary]
 
         wrapper.get_ppa = MagicMock(return_value=mock_ppa)
@@ -417,7 +455,9 @@ class TestWaitForPublished:
         # Only waiting for noble, not jammy
         result = wrapper.wait_for_published(
             "0.19.3-0ubuntu1",
-            series=["noble"], timeout=5, interval=1,
+            series=["noble"],
+            timeout=5,
+            interval=1,
         )
 
         assert result == 0
@@ -431,13 +471,17 @@ class TestWaitForPublished:
 
         jammy_binary = MagicMock()
         jammy_binary.status = "Published"
-        jammy_binary.distro_arch_series_link = "https://api.launchpad.net/devel/ubuntu/jammy/amd64"
+        jammy_binary.distro_arch_series_link = (
+            "https://api.launchpad.net/devel/ubuntu/jammy/amd64"
+        )
         mock_ppa.getPublishedBinaries.return_value = [jammy_binary]
 
         wrapper.get_ppa = MagicMock(return_value=mock_ppa)
 
         result = wrapper.wait_for_published(
-            "0.19.3-0ubuntu1", timeout=5, interval=1,
+            "0.19.3-0ubuntu1",
+            timeout=5,
+            interval=1,
         )
 
         assert result == 0
@@ -456,7 +500,9 @@ class TestWaitForPublished:
 
         mock_binary = MagicMock()
         mock_binary.status = "Published"
-        mock_binary.distro_arch_series_link = "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        mock_binary.distro_arch_series_link = (
+            "https://api.launchpad.net/devel/ubuntu/noble/amd64"
+        )
         # First poll raises a transient error; the retry reconnects and succeeds.
         mock_ppa.getPublishedBinaries.side_effect = [
             ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:2406)"),
@@ -467,7 +513,10 @@ class TestWaitForPublished:
 
         with patch("scripts.launchpad_copy.time.sleep"):
             result = wrapper.wait_for_published(
-                "0.19.3-0ubuntu1", series=["noble"], timeout=5, interval=1,
+                "0.19.3-0ubuntu1",
+                series=["noble"],
+                timeout=5,
+                interval=1,
             )
 
         assert result == 0
@@ -486,7 +535,10 @@ class TestWaitForPublished:
         with patch("scripts.launchpad_copy.time.sleep"):
             with pytest.raises(ssl.SSLEOFError):
                 wrapper.wait_for_published(
-                    "0.19.3-0ubuntu1", series=["noble"], timeout=5, interval=1,
+                    "0.19.3-0ubuntu1",
+                    series=["noble"],
+                    timeout=5,
+                    interval=1,
                 )
 
 
@@ -511,7 +563,9 @@ class TestPromote:
 
         source = make_mock_source(series_name="noble")
         mock_proposed.getPublishedSources.return_value = [source]
-        mock_release.syncSources.side_effect = Exception("same version already published")
+        mock_release.syncSources.side_effect = Exception(
+            "same version already published"
+        )
 
         result = wrapper.promote("0.19.3-0ubuntu1")
 
@@ -542,7 +596,7 @@ class TestPromote:
         assert result == 1
 
     def test_returns_1_when_nothing_to_promote(self):
-        wrapper, mock_proposed, mock_release, _ = make_wrapper_with_mock_lp()
+        wrapper, mock_proposed, _mock_release, _ = make_wrapper_with_mock_lp()
         mock_proposed.getPublishedSources.return_value = []
 
         result = wrapper.promote("0.19.3-0ubuntu1")
@@ -595,10 +649,13 @@ def test_get_current_series_returns_lts():
 class TestBuildParser:
     def test_check_source_args(self):
         parser = build_parser()
-        args = parser.parse_args([
-            "check-source",
-            "--version", "0.19.3-0ubuntu1",
-        ])
+        args = parser.parse_args(
+            [
+                "check-source",
+                "--version",
+                "0.19.3-0ubuntu1",
+            ]
+        )
         assert args.command == "check-source"
         assert args.version == "0.19.3-0ubuntu1"
         assert args.ppa == PROPOSED_PPA_NAME
@@ -616,12 +673,20 @@ class TestBuildParser:
 
     def test_wait_for_published_args(self):
         parser = build_parser()
-        args = parser.parse_args([
-            "wait-for-published",
-            "--version", "0.19.3-0ubuntu1",
-            "--timeout", "3600", "--interval", "30",
-            "--series", "noble", "jammy",
-        ])
+        args = parser.parse_args(
+            [
+                "wait-for-published",
+                "--version",
+                "0.19.3-0ubuntu1",
+                "--timeout",
+                "3600",
+                "--interval",
+                "30",
+                "--series",
+                "noble",
+                "jammy",
+            ]
+        )
         assert args.command == "wait-for-published"
         assert args.timeout == 3600
         assert args.interval == 30

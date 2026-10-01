@@ -364,7 +364,7 @@ jobs:
           KOLIBRI_HOME: .kolibri
         run: uv run python -O -m pytest --reuse-db
   # Tests for platforms/ members with their own suites, each pinned to Python
-  # 3.10. debian-server needs the distro-info system package; android's
+  # 3.10. debian needs the distro-info system package; android's
   # websockets test dep requires >= 3.10.
   platform_tests:
     name: Platform tests (${{ matrix.name }})
@@ -376,8 +376,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: debian-server
-            working-directory: platforms/debian-server
+          - name: debian
+            working-directory: platforms/debian
             python-version: "3.10"
             system-packages: distro-info
           - name: desktop-app

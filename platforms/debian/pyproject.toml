@@ -1,0 +1,30 @@
+[project]
+name = "kolibri-installer-debian"
+version = "0.0.0"
+# Floored to root Kolibri's range, not this member's own tested Python (3.10),
+# so a workspace-wide `uv sync --python <version>` never narrows the lock or
+# fails on this member. The real tested Python (3.10) is pinned in the tox
+# platform_tests job, not here. Matches platforms/debian-server.
+requires-python = ">=3.6, <3.15"
+dependencies = [
+    "distro-info",
+    "packaging",
+]
+
+[dependency-groups]
+test = [
+    "pytest",
+    "vcrpy",
+]
+
+[tool.uv]
+# Not a wheel — the deliverable is a .deb built from the Kolibri tarball, so
+# uv manages only this member's deps in the shared lock/venv (never builds it).
+package = false
+
+[tool.ruff]
+# Inherit root ruff (select, isort first-party list, force-single-line) so this
+# member is linted like the rest of the monorepo; only override target-version:
+# the build tooling uses Python 3.10 syntax, whereas root Kolibri stays py37.
+extend = "../../pyproject.toml"
+target-version = "py310"

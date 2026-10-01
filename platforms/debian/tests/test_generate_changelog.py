@@ -147,6 +147,60 @@ def test_cli_prints_debian_version(tmp_path, capsys):
     assert capsys.readouterr().out == "0.20.0~alpha1\n"
 
 
+@patch("build_tools.generate_changelog.get_current_lts_codename", return_value="noble")
+def test_cli_writes_entries_for_named_package(_mock_codename, tmp_path):
+    changelog_path = tmp_path / "changelog"
+    changelog_path.write_text(
+        "kolibri-server (0.5.1-0ubuntu1) jammy; urgency=medium\n"
+        "\n"
+        "  * Old release\n"
+        "\n"
+        " -- Learning Equality <accounts@learningequality.org>  "
+        "Mon, 31 Mar 2026 12:00:00 -0800\n"
+    )
+    version_path = tmp_path / "VERSION"
+    version_path.write_text("0.19.2\n")
+    releases = [
+        {
+            "tag_name": "v0.19.2",
+            "prerelease": False,
+            "published_at": "2026-02-06T19:46:25Z",
+        },
+        {
+            "tag_name": "v0.19.1",
+            "prerelease": False,
+            "published_at": "2026-01-20T16:54:38Z",
+        },
+    ]
+
+    with patch(
+        "build_tools.generate_changelog.fetch_github_releases", return_value=releases
+    ):
+        cli(
+            [
+                "--package",
+                "kolibri-server",
+                "--debian-changelog",
+                str(changelog_path),
+                "--version-file",
+                str(version_path),
+                "--packaging-changelog",
+                str(tmp_path / "missing"),
+            ]
+        )
+
+    headers = [
+        line
+        for line in changelog_path.read_text().splitlines()
+        if line and not line[0].isspace()
+    ]
+    assert headers == [
+        "kolibri-server (0.19.2-0ubuntu1) noble; urgency=medium",
+        "kolibri-server (0.19.1-0ubuntu1) noble; urgency=medium",
+        "kolibri-server (0.5.1-0ubuntu1) jammy; urgency=medium",
+    ]
+
+
 def test_maintainer_is_valid_mailbox():
     """MAINTAINER must be a valid RFC822 mailbox.
 
@@ -625,6 +679,54 @@ kolibri-source (0.18.4-0ubuntu1) jammy; urgency=medium
             break
     else:
         raise AssertionError("0.19.1-0ubuntu2 entry not found")
+
+
+@patch("build_tools.generate_changelog.get_current_lts_codename", return_value="noble")
+def test_generate_updated_changelog_heads_with_unreleased_build_version(
+    _mock_codename,
+):
+    """A build version with no GitHub release still heads the changelog, so
+    the changelog version matches the orig tarball's DEB_VERSION."""
+    result = generate_updated_changelog(
+        existing_content=SAMPLE_CHANGELOG,
+        releases=[
+            {
+                "tag_name": "v0.19.2",
+                "prerelease": False,
+                "published_at": "2026-02-06T19:46:25Z",
+            },
+        ],
+        packaging_changelog="",
+        build_version="0.20.0.dev0+g1234",
+        ubuntu_revision=3,
+    )
+    assert result.startswith("kolibri-source (0.20.0~dev0-0ubuntu3) noble;")
+    assert result.index("0.19.2-0ubuntu3") < result.index("0.19.1-0ubuntu1")
+
+
+@patch("build_tools.generate_changelog.get_current_lts_codename", return_value="noble")
+def test_generate_updated_changelog_excludes_releases_newer_than_build(
+    _mock_codename,
+):
+    result = generate_updated_changelog(
+        existing_content=SAMPLE_CHANGELOG,
+        releases=[
+            {
+                "tag_name": "v0.19.3",
+                "prerelease": False,
+                "published_at": "2026-03-20T00:16:44Z",
+            },
+            {
+                "tag_name": "v0.19.2",
+                "prerelease": False,
+                "published_at": "2026-02-06T19:46:25Z",
+            },
+        ],
+        packaging_changelog="",
+        build_version="0.19.2",
+    )
+    assert result.startswith("kolibri-source (0.19.2-0ubuntu1) noble;")
+    assert "0.19.3" not in result
 
 
 # --- Tests for main() entrypoint ---

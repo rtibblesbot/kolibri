@@ -7,6 +7,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from datetime import timezone
 from email.utils import format_datetime
 from urllib.request import Request
 from urllib.request import urlopen
@@ -77,7 +78,7 @@ def is_prerelease(version_str):
     return Version(normalize_version(version_str)).is_prerelease
 
 
-PACKAGE_NAME = "kolibri-source"
+DEFAULT_PACKAGE = "kolibri-source"
 MAINTAINER = "Learning Equality <accounts@learningequality.org>"
 
 
@@ -109,12 +110,18 @@ def version_to_debian(version_str):
 
 
 def format_changelog_entry(
-    version, ubuntu_revision, distribution, message, maintainer, timestamp
+    version,
+    ubuntu_revision,
+    distribution,
+    message,
+    maintainer,
+    timestamp,
+    package=DEFAULT_PACKAGE,
 ):
     """Format a single Debian changelog entry."""
     deb_version = version_to_debian(version)
     return (
-        f"{PACKAGE_NAME} ({deb_version}-0ubuntu{ubuntu_revision}) "
+        f"{package} ({deb_version}-0ubuntu{ubuntu_revision}) "
         f"{distribution}; urgency=medium\n"
         f"\n"
         f"  * {message}\n"
@@ -187,6 +194,7 @@ def filter_new_releases(releases, latest_existing, build_version):
     """Filter GitHub releases to only those newer than latest_existing.
 
     - Excludes prereleases, UNLESS the release matches build_version
+    - Excludes versions newer than build_version
     - Excludes versions <= latest_existing
     - Returns filtered list sorted by version ascending
     """
@@ -206,6 +214,9 @@ def filter_new_releases(releases, latest_existing, build_version):
 
         # Skip if not newer than latest existing
         if version_key <= latest_key:
+            continue
+
+        if build_key and version_key > build_key:
             continue
 
         # Skip prereleases unless it's the current build version
@@ -230,7 +241,7 @@ def get_current_lts_codename():
     return ubuntu.lts()
 
 
-def generate_release_entries(releases, ubuntu_revision=1):
+def generate_release_entries(releases, ubuntu_revision=1, package=DEFAULT_PACKAGE):
     """Generate changelog entry dicts from GitHub release data.
 
     Returns list of dicts with keys: version, ubuntu_revision, text
@@ -253,6 +264,7 @@ def generate_release_entries(releases, ubuntu_revision=1):
             message="New upstream release",
             maintainer=MAINTAINER,
             timestamp=timestamp,
+            package=package,
         )
         entries.append(
             {
@@ -330,7 +342,12 @@ def interleave_entries(release_entries, packaging_entries):
 
 
 def generate_updated_changelog(
-    existing_content, releases, packaging_changelog, build_version, ubuntu_revision=1
+    existing_content,
+    releases,
+    packaging_changelog,
+    build_version,
+    ubuntu_revision=1,
+    package=DEFAULT_PACKAGE,
 ):
     """Generate the full updated debian/changelog content.
 
@@ -344,12 +361,27 @@ def generate_updated_changelog(
     # Filter to only new releases
     new_releases = filter_new_releases(releases, latest_existing, build_version)
 
+    # Dev and other untagged builds have no GitHub release, but must still
+    # head the changelog to match the orig tarball's DEB_VERSION.
+    build_version = strip_v_prefix(build_version)
+    build_key = kolibri_version_key(build_version)
+    if build_key > kolibri_version_key(latest_existing) and not any(
+        kolibri_version_key(strip_v_prefix(r["tag_name"])) == build_key
+        for r in new_releases
+    ):
+        new_releases.append(
+            {
+                "tag_name": build_version,
+                "published_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
     if not new_releases and not packaging_changelog.strip():
         return existing_content
 
     # Generate release entries
     release_entries = generate_release_entries(
-        new_releases, ubuntu_revision=ubuntu_revision
+        new_releases, ubuntu_revision=ubuntu_revision, package=package
     )
 
     # Parse packaging entries and filter to only new ones
@@ -378,7 +410,11 @@ def generate_updated_changelog(
 
 
 def main(
-    debian_changelog_path, version_path, packaging_changelog_path, ubuntu_revision=1
+    debian_changelog_path,
+    version_path,
+    packaging_changelog_path,
+    ubuntu_revision=1,
+    package=DEFAULT_PACKAGE,
 ):
     """Update debian/changelog from GitHub releases and top-level CHANGELOG."""
     with open(debian_changelog_path) as f:
@@ -400,6 +436,7 @@ def main(
         packaging_changelog=packaging_changelog,
         build_version=build_version,
         ubuntu_revision=ubuntu_revision,
+        package=package,
     )
 
     with open(debian_changelog_path, "w") as f:
@@ -409,6 +446,11 @@ def main(
 def cli(argv=None):
     parser = argparse.ArgumentParser(
         description="Generate updated debian/changelog from GitHub releases"
+    )
+    parser.add_argument(
+        "--package",
+        default=DEFAULT_PACKAGE,
+        help="Debian source package name (default: %(default)s)",
     )
     parser.add_argument(
         "--debian-changelog",
@@ -446,6 +488,7 @@ def cli(argv=None):
         args.version_file,
         args.packaging_changelog,
         ubuntu_revision=args.ubuntu_revision,
+        package=args.package,
     )
 
 

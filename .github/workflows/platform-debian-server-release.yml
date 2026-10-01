@@ -55,10 +55,13 @@ jobs:
               ;;
           esac
           echo "KOLIBRI_VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Install the changelog generator's LTS data
+        run: .github/scripts/apt-install.sh distro-info-data
       - name: Generate the changelog from the Kolibri version
         working-directory: platforms/debian-server
         env:
           KOLIBRI_VERSION: ${{ steps.kolibri.outputs.KOLIBRI_VERSION }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: make changelog
       - name: Extract the Debian version from the changelog
         id: version
@@ -83,15 +86,14 @@ jobs:
           cache-python: true
       - name: Install the workspace so kolibri resolves from it
         run: uv sync --all-packages
-      - name: Generate the changelog targeting the runner series
-        working-directory: platforms/debian-server
-        run: |
-          SERIES=$(. /etc/os-release && echo "$VERSION_CODENAME")
-          echo "Targeting series: ${SERIES}"
-          DISTRIBUTION="$SERIES" make changelog
       - name: Install build and upload dependencies
         working-directory: platforms/debian-server
         run: make install-upload-deps
+      - name: Generate the changelog from the Kolibri version
+        working-directory: platforms/debian-server
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make changelog
       - name: Install Kolibri
         working-directory: platforms/debian-server
         run: make install-kolibri

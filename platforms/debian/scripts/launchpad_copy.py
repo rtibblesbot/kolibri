@@ -8,7 +8,6 @@ Subcommands:
   wait-for-published  Wait for published binaries to appear for a source package.
 
 Adapted from kolibri-server's launchpad_copy.py with these changes:
-  - PACKAGE_WHITELIST targets kolibri-source instead of kolibri-server
   - Series discovery uses distro_info (including ESM) instead of Launchpad distribution.series
   - LP_CREDENTIALS_FILE environment variable support for CI credentials
   - check-source returns exit code 2 on API errors (distinct from 0=found, 1=missing)
@@ -49,11 +48,6 @@ except ImportError:
 PPA_OWNER = "learningequality"
 PROPOSED_PPA_NAME = "kolibri-proposed"
 RELEASE_PPA_NAME = "kolibri"
-# The source package and the single binary package it produces have
-# different names (debian/control: Source: kolibri-source / Package: kolibri).
-SOURCE_PACKAGE_NAME = "kolibri-source"
-BINARY_PACKAGE_NAME = "kolibri"
-PACKAGE_WHITELIST = [SOURCE_PACKAGE_NAME]
 POCKET = "Release"
 APP_NAME = "ppa-kolibri-source-copy-packages"
 
@@ -170,7 +164,9 @@ def set_up_logging(level=logging.INFO):
 class LaunchpadWrapper:
     """Cached wrapper around the Launchpad API."""
 
-    def __init__(self):
+    def __init__(self, source_package, binary_package):
+        self.source_package = source_package
+        self.binary_package = binary_package
         self.queue = defaultdict(set)
         self._series = {}
 
@@ -404,14 +400,14 @@ class LaunchpadWrapper:
         source_series = source_series or get_current_series()
         log.info(
             "Spinning up the Launchpad API to copy targets in %s (source series: %s)",
-            ", ".join(PACKAGE_WHITELIST),
+            self.source_package,
             source_series,
         )
 
         ppa = self.proposed_ppa
 
         for name, version in self.get_usable_sources(
-            ppa, tuple(PACKAGE_WHITELIST), source_series
+            ppa, (self.source_package,), source_series
         ):
             mentioned = False
             notices = []
@@ -441,7 +437,7 @@ class LaunchpadWrapper:
         try:
             ppa = self.get_ppa(ppa_name)
             published = ppa.getPublishedSources(
-                source_name=SOURCE_PACKAGE_NAME,
+                source_name=self.source_package,
                 version=version,
                 order_by_date=True,
             )
@@ -453,7 +449,7 @@ class LaunchpadWrapper:
         except Exception as e:
             log.error(
                 "Error checking %s %s in %s: %s",
-                SOURCE_PACKAGE_NAME,
+                self.source_package,
                 version,
                 ppa_name,
                 e,
@@ -462,13 +458,13 @@ class LaunchpadWrapper:
         if active:
             log.info(
                 "%s %s already exists in %s (status: %s)",
-                SOURCE_PACKAGE_NAME,
+                self.source_package,
                 version,
                 ppa_name,
                 active[0].status,
             )
             return 0
-        log.info("%s %s not found in %s", SOURCE_PACKAGE_NAME, version, ppa_name)
+        log.info("%s %s not found in %s", self.source_package, version, ppa_name)
         return 1
 
     def wait_for_published(
@@ -488,7 +484,7 @@ class LaunchpadWrapper:
 
         log.info(
             "Waiting for %s %s to be published in %s%s...",
-            BINARY_PACKAGE_NAME,
+            self.binary_package,
             version,
             ppa_name,
             f" for series: {', '.join(sorted(expected))}" if expected else "",
@@ -500,7 +496,7 @@ class LaunchpadWrapper:
                 sources = self._retry_transient(
                     "getPublishedSources",
                     lambda: ppa.getPublishedSources(
-                        source_name=SOURCE_PACKAGE_NAME,
+                        source_name=self.source_package,
                         version=version,
                         order_by_date=True,
                     ),
@@ -527,7 +523,7 @@ class LaunchpadWrapper:
             bins = self._retry_transient(
                 "getPublishedBinaries",
                 lambda: ppa.getPublishedBinaries(
-                    binary_name=BINARY_PACKAGE_NAME,
+                    binary_name=self.binary_package,
                     version=version,
                     order_by_date=True,
                 ),
@@ -560,7 +556,7 @@ class LaunchpadWrapper:
 
         log.error(
             "Timeout: %s %s not published within %ds",
-            BINARY_PACKAGE_NAME,
+            self.binary_package,
             version,
             timeout,
         )
@@ -582,7 +578,7 @@ class LaunchpadWrapper:
         # Group packages by series for syncSources calls
         by_series = defaultdict(list)
         for pkg in packages:
-            if pkg.source_package_name not in PACKAGE_WHITELIST:
+            if pkg.source_package_name != self.source_package:
                 continue
             if pkg.source_package_version != version:
                 continue
@@ -637,7 +633,16 @@ class LaunchpadWrapper:
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Launchpad PPA copy tool for kolibri-source packages."
+        description="Launchpad PPA copy tool for Kolibri packages."
+    )
+    # Required so neither release pipeline can act on the other's package.
+    parser.add_argument(
+        "--source-package", required=True, help="Launchpad source package name."
+    )
+    parser.add_argument(
+        "--binary-package",
+        required=True,
+        help="Binary package the source builds (debian/control Package).",
     )
     parser.add_argument(
         "-v",
@@ -661,7 +666,7 @@ def build_parser():
     copy_parser.add_argument(
         "--series",
         default=None,
-        help="Source series override (default: auto-detect from OS).",
+        help="Source series override (default: current LTS).",
     )
 
     promote_parser = subparsers.add_parser(
@@ -730,13 +735,13 @@ def configure_logging(args):
 
 def cmd_copy_to_series(args):
     """Copy packages from source series to all other supported Ubuntu series."""
-    lp = LaunchpadWrapper()
+    lp = LaunchpadWrapper(args.source_package, args.binary_package)
     return lp.copy_to_series(source_series=args.series)
 
 
 def cmd_wait_for_published(args):
     """Wait for published binaries to appear."""
-    lp = LaunchpadWrapper()
+    lp = LaunchpadWrapper(args.source_package, args.binary_package)
     return lp.wait_for_published(
         version=args.version,
         ppa_name=args.ppa,
@@ -748,7 +753,7 @@ def cmd_wait_for_published(args):
 
 def cmd_check_source(args):
     """Check if a source package version already exists in a PPA."""
-    lp = LaunchpadWrapper()
+    lp = LaunchpadWrapper(args.source_package, args.binary_package)
     return lp.check_source(
         version=args.version,
         ppa_name=args.ppa,
@@ -757,7 +762,7 @@ def cmd_check_source(args):
 
 def cmd_promote(args):
     """Promote published packages from kolibri-proposed to kolibri PPA."""
-    lp = LaunchpadWrapper()
+    lp = LaunchpadWrapper(args.source_package, args.binary_package)
     return lp.promote(version=args.version)
 
 

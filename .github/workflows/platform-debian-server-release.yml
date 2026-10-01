@@ -107,13 +107,21 @@ jobs:
         working-directory: platforms/debian-server
         env:
           LP_CREDENTIALS_FILE: /tmp/lp-creds.txt
+          VERSION: ${{ needs.check_version.outputs.version }}
         run: |
-          if python3 scripts/launchpad_copy.py check-source \
-            --package kolibri-server \
-            --version "${{ needs.check_version.outputs.version }}"; then
+          set +e
+          python3 ../debian/scripts/launchpad_copy.py \
+            --source-package kolibri-server --binary-package kolibri-server \
+            check-source --version "$VERSION"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
             echo "already_uploaded=true" >> "$GITHUB_OUTPUT"
-          else
+          elif [ "$rc" -eq 1 ]; then
             echo "already_uploaded=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Failed to check source package status"
+            exit "$rc"
           fi
       - name: Import GPG key
         if: steps.check_source.outputs.already_uploaded != 'true'
@@ -145,7 +153,7 @@ jobs:
       - name: Checkout codebase
         uses: actions/checkout@v7.0.1
       - name: Install dependencies
-        run: .github/scripts/apt-install.sh python3-launchpadlib
+        run: .github/scripts/apt-install.sh python3-launchpadlib python3-distro-info
       - name: Write Launchpad credentials
         env:
           LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
@@ -155,12 +163,11 @@ jobs:
         working-directory: platforms/debian-server
         env:
           LP_CREDENTIALS_FILE: /tmp/lp-creds.txt
+          VERSION: ${{ needs.check_version.outputs.version }}
         run: |
-          SERIES=$(. /etc/os-release && echo "$VERSION_CODENAME")
-          python3 scripts/launchpad_copy.py wait-for-published \
-            --package kolibri-server \
-            --version "${{ needs.check_version.outputs.version }}" \
-            --series "$SERIES"
+          python3 ../debian/scripts/launchpad_copy.py \
+            --source-package kolibri-server --binary-package kolibri-server \
+            wait-for-published --version "$VERSION"
       - name: Cleanup Launchpad credentials
         if: always()
         run: rm -f /tmp/lp-creds.txt
@@ -172,7 +179,7 @@ jobs:
       - name: Checkout codebase
         uses: actions/checkout@v7.0.1
       - name: Install dependencies
-        run: .github/scripts/apt-install.sh python3-launchpadlib
+        run: .github/scripts/apt-install.sh python3-launchpadlib python3-distro-info
       - name: Write Launchpad credentials
         env:
           LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
@@ -183,7 +190,9 @@ jobs:
         env:
           LP_CREDENTIALS_FILE: /tmp/lp-creds.txt
         run: |
-          python3 scripts/launchpad_copy.py copy-to-series
+          python3 ../debian/scripts/launchpad_copy.py \
+            --source-package kolibri-server --binary-package kolibri-server \
+            copy-to-series
       - name: Cleanup Launchpad credentials
         if: always()
         run: rm -f /tmp/lp-creds.txt
@@ -198,7 +207,7 @@ jobs:
       - name: Checkout codebase
         uses: actions/checkout@v7.0.1
       - name: Install dependencies
-        run: .github/scripts/apt-install.sh python3-launchpadlib
+        run: .github/scripts/apt-install.sh python3-launchpadlib python3-distro-info
       - name: Write Launchpad credentials
         env:
           LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
@@ -208,10 +217,11 @@ jobs:
         working-directory: platforms/debian-server
         env:
           LP_CREDENTIALS_FILE: /tmp/lp-creds.txt
+          VERSION: ${{ needs.check_version.outputs.version }}
         run: |
-          python3 scripts/launchpad_copy.py wait-for-published \
-            --package kolibri-server \
-            --version "${{ needs.check_version.outputs.version }}"
+          python3 ../debian/scripts/launchpad_copy.py \
+            --source-package kolibri-server --binary-package kolibri-server \
+            wait-for-published --version "$VERSION"
       - name: Cleanup Launchpad credentials
         if: always()
         run: rm -f /tmp/lp-creds.txt
@@ -238,7 +248,7 @@ jobs:
       - name: Checkout codebase
         uses: actions/checkout@v7.0.1
       - name: Install dependencies
-        run: .github/scripts/apt-install.sh python3-launchpadlib
+        run: .github/scripts/apt-install.sh python3-launchpadlib python3-distro-info
       - name: Write Launchpad credentials
         env:
           LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
@@ -248,18 +258,20 @@ jobs:
         working-directory: platforms/debian-server
         env:
           LP_CREDENTIALS_FILE: /tmp/lp-creds.txt
+          VERSION: ${{ needs.check_version.outputs.version }}
         run: |
-          python3 scripts/launchpad_copy.py promote \
-            --version "${{ needs.check_version.outputs.version }}"
+          python3 ../debian/scripts/launchpad_copy.py \
+            --source-package kolibri-server --binary-package kolibri-server \
+            promote --version "$VERSION"
       - name: Wait for promoted packages to be published
         working-directory: platforms/debian-server
         env:
           LP_CREDENTIALS_FILE: /tmp/lp-creds.txt
+          VERSION: ${{ needs.check_version.outputs.version }}
         run: |
-          python3 scripts/launchpad_copy.py wait-for-published \
-            --package kolibri-server \
-            --version "${{ needs.check_version.outputs.version }}" \
-            --ppa kolibri
+          python3 ../debian/scripts/launchpad_copy.py \
+            --source-package kolibri-server --binary-package kolibri-server \
+            wait-for-published --version "$VERSION" --ppa kolibri
       - name: Cleanup Launchpad credentials
         if: always()
         run: rm -f /tmp/lp-creds.txt

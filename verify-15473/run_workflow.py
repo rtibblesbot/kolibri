@@ -58,6 +58,10 @@ def main(workflow, site):
             if action == "actions/upload-pages-artifact":
                 artifact = os.path.join(workdir, step["with"]["path"])
             elif action == "actions/deploy-pages":
+                if not os.path.isdir(artifact or ""):
+                    print("::endgroup::", flush=True)
+                    print(f"FAILED_STEP={name}", flush=True)
+                    return 1
                 deploy(artifact, site)
             else:
                 sys.exit(f"harness: unsupported action {action}")

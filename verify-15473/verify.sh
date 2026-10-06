@@ -48,8 +48,11 @@ fail() { echo "::error::$*"; FAILS=$((FAILS + 1)); }
 
 run() { # <case> <secret-key-file> [workflow]
   echo "=== $1"
-  DEBIAN_REPO_SIGNING_KEY=$(cat "$2") python3 "$HERE/run_workflow.py" "${3:-$WF}" site | tee "$1.log"
-  return "${PIPESTATUS[0]}"
+  local rc=0
+  DEBIAN_REPO_SIGNING_KEY=$(cat "$2") python3 "$HERE/run_workflow.py" "${3:-$WF}" site > "$1.log" 2>&1 || rc=$?
+  cat "$1.log"
+  echo "::notice::$1: exit $rc $(grep '^FAILED_STEP=' "$1.log" || true) | $(grep -E '^(E|W): |::error::' "$1.log" | head -3 | tr '\n' ' ')"
+  return "$rc"
 }
 
 fields() { grep -E '^(Origin|Label|Suite|Codename):' "$1/dists/stable/Release"; }
@@ -59,7 +62,7 @@ served() { awk '/^Package:/ {p=$2} /^Version:/ {print p, $2}' site/dists/stable/
 assert_cutover_site() {
   gpgv --keyring "$T/old.gpg" site/dists/stable/InRelease || fail "$1: InRelease does not verify with the old key"
   diff <(fields site-orig) <(fields site) || fail "$1: Release fields changed"
-  printf 'kolibri 0.19.5+cutovertest1\nkolibri 0.19.5-0ubuntu1\n' | diff - <(served) || fail "$1: served packages wrong"
+  printf 'kolibri 0.19.5+cutovertest1\nkolibri 0.19.5-0ubuntu1\n' | diff - <(served) || fail "$1: served packages wrong: $(served | tr '\n' ';')"
   size=$(stat -c %s site/pool/main/k/kolibri/kolibri_0.19.5+cutovertest1_all.deb 2>/dev/null || echo 0)
   [ "$size" -gt $((100 * 1024 * 1024)) ] || fail "$1: >100 MiB .deb not served (size $size)"
 }

@@ -51,7 +51,7 @@ run() { # <case> <secret-key-file> [workflow]
   local rc=0
   DEBIAN_REPO_SIGNING_KEY=$(cat "$2") python3 "$HERE/run_workflow.py" "${3:-$WF}" site > "$1.log" 2>&1 || rc=$?
   cat "$1.log"
-  echo "::notice::$1: exit $rc $(grep '^FAILED_STEP=' "$1.log" || true) | $(grep -E '^(E|W): |::error::' "$1.log" | head -3 | tr '\n' ' ')"
+  echo "::notice::$1: exit $rc $(grep '^FAILED_STEP=' "$1.log" || true) | $(grep -B6 '^FAILED_STEP=' "$1.log" | grep -v '^::' | tr '\n' ' ')"
   return "$rc"
 }
 

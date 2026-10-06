@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Exercise deploy_pages.yml against a stand-in of the live installer-debian site.
 set -euo pipefail
+trap 'echo "::error::verify.sh line $LINENO: $BASH_COMMAND"' ERR
 HERE=$(cd "$(dirname "$0")" && pwd)
 WF="$HERE/deploy_pages.yml"
 T=$(mktemp -d)
@@ -28,7 +29,7 @@ GNUPGHOME=$OLD_HOME reprepro -b site export stable
 build_deb() { # <package> <version> <out-dir> [pad-MiB]
   rm -rf pkg && mkdir -p pkg/DEBIAN pkg/usr/share/"$1"
   head -c "${4:-0}M" /dev/urandom > pkg/usr/share/"$1"/pad
-  printf 'Package: %s\nVersion: %s\nArchitecture: all\nMaintainer: Cutover Test <cutover@example.com>\nDescription: cutover test\n' "$1" "$2" > pkg/DEBIAN/control
+  printf 'Package: %s\nVersion: %s\nSection: misc\nPriority: optional\nArchitecture: all\nMaintainer: Cutover Test <cutover@example.com>\nDescription: cutover test\n' "$1" "$2" > pkg/DEBIAN/control
   mkdir -p "$3"
   dpkg-deb -Znone --build pkg "$3/${1}_${2}_all.deb"
 }

@@ -94,6 +94,7 @@ jobs:
           Suite: stable
           VerifyRelease: ${GPG_KEY_ID: -16}
           EOF
+          reprepro -b repo update stable
           reprepro -b repo includedeb stable incoming/*.deb
           gpg --armor --export "$GPG_KEY_ID" > repo/pubkey.asc
 

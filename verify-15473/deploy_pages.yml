@@ -112,7 +112,7 @@ jobs:
           apt-get -c "$APT_CONF" update --error-on=any
           # Every package name served before, and the new .deb at its exact version.
           apt-cache -c "$APT_CONF" dumpavail | awk '/^Package:/ {p=$2; print p} /^Version:/ {print p, $2}' | sort -u > "$RUNNER_TEMP/served-after"
-          { cat "$RUNNER_TEMP/served-before"; dpkg-deb --show --showformat='${Package} ${Version}\n' incoming/*.deb; } | sort -u > "$RUNNER_TEMP/expected"
+          { cat "$RUNNER_TEMP/served-before"; echo "$(dpkg-deb -f incoming/*.deb Package) $(dpkg-deb -f incoming/*.deb Version)"; } | sort -u > "$RUNNER_TEMP/expected"
           MISSING=$(comm -23 "$RUNNER_TEMP/expected" "$RUNNER_TEMP/served-after")
           if [ -n "$MISSING" ]; then
             echo "::error::$SITE_URL does not serve: $MISSING"

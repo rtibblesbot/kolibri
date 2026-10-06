@@ -87,11 +87,12 @@ jobs:
           SignWith: $GPG_KEY_ID
           Update: live
           EOF
+          # VerifyRelease takes a long key id; reprepro rejects a fingerprint.
           cat > repo/conf/updates <<EOF
           Name: live
           Method: $SITE_URL
           Suite: stable
-          VerifyRelease: $GPG_KEY_ID
+          VerifyRelease: ${GPG_KEY_ID: -16}
           EOF
           reprepro -b repo update stable
           reprepro -b repo includedeb stable incoming/*.deb

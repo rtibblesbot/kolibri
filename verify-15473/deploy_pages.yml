@@ -10,7 +10,8 @@ on:
 jobs:
   deploy:
     name: Add a .deb to the GitHub Pages repository
-    runs-on: ubuntu-latest
+    # reprepro's Limit needs 5.4+; ubuntu-24.04 ships 5.3.
+    runs-on: ubuntu-26.04
     permissions:
       pages: write
       id-token: write

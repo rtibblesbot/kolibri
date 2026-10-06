@@ -2,8 +2,9 @@ name: Verify deploy_pages.yml (#15473)
 on: pull_request
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v6
+      - run: apt-cache policy reprepro | sed -n 1,3p | sed 's/^/::notice::/'
       - run: sudo apt-get update && sudo apt-get install -y reprepro python3-yaml
       - run: bash verify-15473/verify.sh

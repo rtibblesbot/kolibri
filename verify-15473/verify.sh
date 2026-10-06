@@ -24,20 +24,22 @@ git clone -q --depth 1 -b gh-pages https://github.com/learningequality/kolibri-i
 rm -rf site/.git
 sed -i "s/^SignWith: .*/SignWith: $OLD_FPR/" site/conf/distributions
 GNUPGHOME=$OLD_HOME reprepro -b site export stable
+
+build_deb() { # <package> <version> <out-dir> [pad-MiB]
+  rm -rf pkg && mkdir -p pkg/DEBIAN pkg/usr/share/"$1"
+  head -c "${4:-0}M" /dev/urandom > pkg/usr/share/"$1"/pad
+  printf 'Package: %s\nVersion: %s\nArchitecture: all\nMaintainer: Cutover Test <cutover@example.com>\nDescription: cutover test\n' "$1" "$2" > pkg/DEBIAN/control
+  mkdir -p "$3"
+  dpkg-deb -Znone --build pkg "$3/${1}_${2}_all.deb"
+}
+# A second package the cutover .deb does not replace: only the mirror keeps it.
+build_deb kolibri-standin-extra 1.0 extra
+GNUPGHOME=$OLD_HOME reprepro -b site includedeb stable extra/*.deb
 cp -a site site-orig
 (cd site && python3 -m http.server 8000 --bind 127.0.0.1 >/dev/null 2>&1 &)
 
 # Synthetic cutover .deb over GitHub's 100 MiB push limit.
-mkdir -p pkg/DEBIAN pkg/usr/share/kolibri-cutovertest debsrv
-head -c 110M /dev/urandom > pkg/usr/share/kolibri-cutovertest/pad
-cat > pkg/DEBIAN/control <<EOF
-Package: kolibri
-Version: 0.19.5+cutovertest1
-Architecture: all
-Maintainer: Cutover Test <cutover@example.com>
-Description: cutover test
-EOF
-dpkg-deb -Znone --build pkg debsrv/kolibri_0.19.5+cutovertest1_all.deb
+build_deb kolibri 0.19.5+cutovertest1 debsrv 110
 (cd debsrv && python3 -m http.server 8001 --bind 127.0.0.1 >/dev/null 2>&1 &)
 sleep 2
 
@@ -62,7 +64,7 @@ served() { awk '/^Package:/ {p=$2} /^Version:/ {print p, $2}' site/dists/stable/
 assert_cutover_site() {
   gpgv --keyring "$T/old.gpg" site/dists/stable/InRelease || fail "$1: InRelease does not verify with the old key"
   diff <(fields site-orig) <(fields site) || fail "$1: Release fields changed"
-  printf 'kolibri 0.19.5+cutovertest1\nkolibri 0.19.5-0ubuntu1\n' | diff - <(served) || fail "$1: served packages wrong: $(served | tr '\n' ';')"
+  printf 'kolibri 0.19.5+cutovertest1\nkolibri-standin-extra 1.0\n' | diff - <(served) || fail "$1: served packages wrong: $(served | tr '\n' ';')"
   size=$(stat -c %s site/pool/main/k/kolibri/kolibri_0.19.5+cutovertest1_all.deb 2>/dev/null || echo 0)
   [ "$size" -gt $((100 * 1024 * 1024)) ] || fail "$1: >100 MiB .deb not served (size $size)"
 }

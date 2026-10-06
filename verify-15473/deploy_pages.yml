@@ -10,8 +10,7 @@ on:
 jobs:
   deploy:
     name: Add a .deb to the GitHub Pages repository
-    # reprepro's Limit needs 5.4+; ubuntu-24.04 ships 5.3.
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
@@ -63,7 +62,7 @@ jobs:
             echo "::error::$SITE_URL does not verify with $GPG_KEY_ID, the key in DEBIAN_REPO_SIGNING_KEY"
             exit 1
           }
-          apt-cache -c "$APT_DIR/apt.conf" dumpavail | awk '/^Package:/ {p=$2} /^Version:/ {print p, $2}' | sort -u > "$RUNNER_TEMP/served-before"
+          apt-cache -c "$APT_DIR/apt.conf" dumpavail | awk '/^Package:/ {print $2}' | sort -u > "$RUNNER_TEMP/served-before"
           cat "$RUNNER_TEMP/served-before"
 
       - name: Download .deb from URL
@@ -74,7 +73,6 @@ jobs:
           wget -P incoming/ "$DEB_URL"
 
       # The live site is the only copy of what stragglers are served.
-      # Limit: 0 keeps every version; reprepro's default keeps one per package.
       - name: Mirror the live site and add the .deb
         run: |
           mkdir -p repo/conf
@@ -87,7 +85,6 @@ jobs:
           Components: main
           Description: Kolibri Debian repository
           SignWith: $GPG_KEY_ID
-          Limit: 0
           Update: live
           EOF
           cat > repo/conf/updates <<EOF
@@ -112,7 +109,8 @@ jobs:
       - name: Check the deployed site
         run: |
           apt-get -c "$APT_CONF" update --error-on=any
-          apt-cache -c "$APT_CONF" dumpavail | awk '/^Package:/ {p=$2} /^Version:/ {print p, $2}' | sort -u > "$RUNNER_TEMP/served-after"
+          # Every package name served before, and the new .deb at its exact version.
+          apt-cache -c "$APT_CONF" dumpavail | awk '/^Package:/ {p=$2; print p} /^Version:/ {print p, $2}' | sort -u > "$RUNNER_TEMP/served-after"
           { cat "$RUNNER_TEMP/served-before"; dpkg-deb --show --showformat='${Package} ${Version}\n' incoming/*.deb; } | sort -u > "$RUNNER_TEMP/expected"
           MISSING=$(comm -23 "$RUNNER_TEMP/expected" "$RUNNER_TEMP/served-after")
           if [ -n "$MISSING" ]; then

@@ -8,6 +8,7 @@ on:
     branches:
       - develop
       - 'release-v**'
+      - 'verify-15375-**'
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
@@ -53,4 +54,4 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run tests
-        run: pnpm run coverage
+        run: pnpm test-jest --testPathPattern qti_viewer

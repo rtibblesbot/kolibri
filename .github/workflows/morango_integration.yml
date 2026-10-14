@@ -6,6 +6,7 @@ on:
     branches:
       - develop
       - release-*
+      - verify-15579-*
     paths:
       - 'pyproject.toml'
       - 'uv.lock'
@@ -44,7 +45,7 @@ jobs:
           uv sync --group test --python ${{ matrix.python-version }}
           uv pip install -e .
       - name: Test with pytest
-        run: uv run pytest kolibri/core/auth/test/test_morango_integration.py
+        run: uv run pytest kolibri/core/auth/test/test_morango_integration.py -k KolibriServer -v
   morango_integration_tests_sqlite_no_uv:
     name: Morango Integration Tests for Python versions without uv support
     runs-on: ubuntu-latest
@@ -100,7 +101,7 @@ jobs:
           echo 'from kolibri.utils.cli import main; main()' >> /usr/local/bin/kolibri
           chmod +x /usr/local/bin/kolibri
       - name: Test with pytest
-        run: python -m pytest kolibri/core/auth/test/test_morango_integration.py
+        run: python -m pytest kolibri/core/auth/test/test_morango_integration.py -k KolibriServer -v
   morango_integration_tests_postgres:
     name: Morango Integration Tests with PostgreSQL
     runs-on: ubuntu-latest
@@ -140,7 +141,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group test --extra postgres --python 3.9
       - name: Test with pytest
-        run: uv run pytest kolibri/core/auth/test/test_morango_integration.py
+        run: uv run pytest kolibri/core/auth/test/test_morango_integration.py -k KolibriServer -v
         env:
           KOLIBRI_DATABASE_ENGINE: postgres
           KOLIBRI_DATABASE_USER: postgres

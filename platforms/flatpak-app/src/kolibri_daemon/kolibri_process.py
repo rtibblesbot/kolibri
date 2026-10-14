@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class KolibriDaemonProcess(KolibriProcessBus):
     __application: Application
+    __dbus_plugin: _DBusPlugin
 
     def __init__(self, application: Application):
         super().__init__()
@@ -30,7 +31,8 @@ class KolibriDaemonProcess(KolibriProcessBus):
         self.thread_wait.unsubscribe()
 
         self.__application = application
-        _DBusPlugin(self, application).subscribe()
+        self.__dbus_plugin = _DBusPlugin(self, application)
+        self.__dbus_plugin.subscribe()
 
     def run(self):
         # KolibriProcessBus.run() goes on to RUN; Kolibri waits for Start.
@@ -44,6 +46,14 @@ class KolibriDaemonProcess(KolibriProcessBus):
             # can take the name while this Kolibri stops.
             self.__application.detach_kolibri()
         return super().transition(desired_state)
+
+    def publish(self, channel: str, *args, **kwargs):
+        if channel == "SIGTERM":
+            # magicbus's handler exits nested inside START; servers that start
+            # after it never get a STOP.
+            self.__dbus_plugin.exit()
+            return []
+        return super().publish(channel, *args, **kwargs)
 
 
 class _DBusPlugin(SimplePlugin):
@@ -82,11 +92,17 @@ class _DBusPlugin(SimplePlugin):
     def main(self):
         # Published from block() on the main thread, so commands are applied in
         # order with run() and signal handling.
+        states = []
         while True:
             try:
-                state = self.__commands.get_nowait()
+                states.append(self.__commands.get_nowait())
             except queue.Empty:
-                return
+                break
+        # An exit skips commands queued before it, as magicbus's own SIGTERM
+        # handler would.
+        if "EXITED" in states:
+            states = ["EXITED"]
+        for state in states:
             self.bus.transition(state)
 
     def ENTER(self):

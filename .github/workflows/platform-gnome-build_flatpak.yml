@@ -26,7 +26,7 @@ jobs:
   build_flatpak:
     name: Build Flatpak bundle
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
       options: --privileged

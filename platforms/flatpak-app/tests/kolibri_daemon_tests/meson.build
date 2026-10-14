@@ -1,10 +1,8 @@
 test(
-    'Python unit tests for kolibri-daemon',
-    find_program('dbus-run-session'),
-    args: [
-        '--config-file', dbus_session_conf,
-        '--', python_installation.full_path(), '-m', 'unittest'
-    ],
+    'kolibri-daemon stress',
+    python_installation,
+    args: [files('../stress_driver.py'), dbus_session_conf],
     env: tests_python_env,
-    workdir: meson.current_source_dir()
+    workdir: meson.current_source_dir(),
+    timeout: 0
 )

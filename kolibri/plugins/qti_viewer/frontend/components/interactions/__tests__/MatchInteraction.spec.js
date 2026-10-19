@@ -5,6 +5,10 @@ import { answerGuideStrings } from '../../AnswerGuide.vue';
 import { slotListboxStrings } from '../../../composables/useSlotListbox';
 import { matchStrings } from '../MatchInteraction.vue';
 
+// MathML fixtures take SafeHTML's MathJax path in jsdom, which has no layout;
+// its font URL needs plugin URL data that tests lack.
+jest.mock('kolibri/urls');
+
 const {
   responsePoolLabel$,
   entryEmpty$,
@@ -873,5 +877,64 @@ describe('Review mode', () => {
     expect(within(container).getByLabelText(rowLabel$({ source: 'Capulet' }))).toHaveTextContent(
       'Romeo and Juliet',
     );
+  });
+});
+
+describe('MathML choices', () => {
+  const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
+  const ROOT_ALTTEXT = 'square root of 16';
+  const ROOT_LABEL = 'root sixteen';
+  const SQUARE_ALTTEXT = 'x squared';
+  const rootMath = (attrs = '') =>
+    `<math xmlns="${MATH_NS}" ${attrs} alttext="${ROOT_ALTTEXT}"><msqrt><mn>16</mn></msqrt></math>`;
+  const xml = ({ source, target }) => `<qti-assessment-item
+      xmlns="http://www.imsglobal.org/xsd/imsqtiasi_v3p0"
+      identifier="match-math" title="Match math" adaptive="false" time-dependent="false">
+      <qti-response-declaration identifier="RESPONSE" cardinality="multiple" base-type="directedPair"/>
+      <qti-item-body>
+        <qti-match-interaction response-identifier="RESPONSE" max-associations="1">
+          <qti-simple-match-set>
+            <qti-simple-associable-choice identifier="S" match-max="1">${source}</qti-simple-associable-choice>
+          </qti-simple-match-set>
+          <qti-simple-match-set>
+            <qti-simple-associable-choice identifier="T" match-max="1">${target}</qti-simple-associable-choice>
+          </qti-simple-match-set>
+        </qti-match-interaction>
+      </qti-item-body>
+    </qti-assessment-item>`;
+
+  it("names a row and its empty entry by a source's math alttext", () => {
+    renderAssessmentItem(
+      xml({
+        source: rootMath(),
+        target: 'Four',
+      }),
+    );
+    expect(screen.getByLabelText(rowLabel$({ source: ROOT_ALTTEXT }))).toBeVisible();
+    expect(screen.getByLabelText(entryEmpty$({ source: ROOT_ALTTEXT }))).toBeVisible();
+  });
+
+  it("names an option and the entry it fills by a target's math alttext", () => {
+    renderAssessmentItem(
+      xml({
+        source: 'Area',
+        target: `<math xmlns="${MATH_NS}" alttext="${SQUARE_ALTTEXT}"><msup><mi>x</mi><mn>2</mn></msup></math>`,
+      }),
+      { answerState: { RESPONSE: [['S', 'T']] } },
+    );
+    const entry = screen.getByLabelText(
+      entryFilled$({ number: 1, source: 'Area', response: SQUARE_ALTTEXT }),
+    );
+    expect(within(entry).getByRole('option', { name: SQUARE_ALTTEXT })).toBeInTheDocument();
+  });
+
+  it('prefers the aria-label of math over its alttext', () => {
+    renderAssessmentItem(
+      xml({
+        source: rootMath(`aria-label="${ROOT_LABEL}"`),
+        target: 'Four',
+      }),
+    );
+    expect(screen.getByLabelText(entryEmpty$({ source: ROOT_LABEL }))).toBeVisible();
   });
 });

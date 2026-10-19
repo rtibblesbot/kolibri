@@ -931,12 +931,11 @@ describe('SafeHTML', () => {
         expect(screen.queryByTestId('mathjax-output')).not.toBeInTheDocument();
       });
 
-      it('drops authored alttext from native math', () => {
+      it('keeps authored alttext on native math', () => {
         const { container } = render(createSafeHTML(), {
           props: { html: '<math alttext="x"><mi>x</mi></math>' },
         });
-        expect(container.querySelector('math.safe-html')).not.toBeNull();
-        expect(container.querySelector('[alttext]')).toBeNull();
+        expect(container.querySelector('math.safe-html[alttext="x"]')).not.toBeNull();
       });
 
       it.each([

@@ -30,8 +30,8 @@ export function isFixed(vnode) {
 }
 
 /**
- * Plain text for a vnode's content. Image content contributes its alt text,
- * which is all a choice made of a single image has to identify it by.
+ * Plain text for a vnode's content. An element's `aria-label`, an image's alt
+ * text or MathML's `alttext` stands in for its children.
  * @param {object} vnode - Any vnode
  * @returns {string} The text, or '' when there is none
  */
@@ -42,9 +42,11 @@ export function vnodeToText(vnode) {
   if (vnode.text) {
     return vnode.text.trim();
   }
-  const alt = vnode.componentOptions?.propsData?.alt ?? vnode.data?.attrs?.alt;
-  if (alt) {
-    return String(alt).trim();
+  const attrs = vnode.data?.attrs;
+  const label =
+    attrs?.['aria-label'] || vnode.componentOptions?.propsData?.alt || attrs?.alt || attrs?.alttext;
+  if (label) {
+    return String(label).trim();
   }
   const children = vnode.componentOptions?.children ?? vnode.children;
   if (children) {

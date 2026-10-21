@@ -1,0 +1,32 @@
+name: Verify Android JVM tests
+on:
+  push:
+    branches:
+      - 'verify-15012-**'
+  pull_request:
+    branches:
+      - 'verify-15012-**'
+jobs:
+  android_jvm_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: false
+      - run: uv sync --package kolibri-installer-android --python 3.10
+      - name: Run JVM unit tests and spotless
+        working-directory: platforms/android
+        run: ./gradlew --continue test spotlessCheck
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: platforms/android/app/build/reports/tests

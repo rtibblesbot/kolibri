@@ -39,6 +39,7 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - 'python_packages/**'
+              - 'platforms/android/**'
   unit_test_stage1:
     name: Python unit tests (Python 3.10)
     needs: pre_job

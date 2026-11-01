@@ -1628,12 +1628,8 @@ class Role(AbstractFacilityDataModel):
                 and user.dataset.picture_password_settings is not None
             ):
                 # Deferred to avoid circular import: picture_passwords.py imports from models.py
-                from .utils.picture_passwords import (  # noqa: PLC0415
-                    are_picture_passwords_exhausted,
-                )
-                from .utils.picture_passwords import (  # noqa: PLC0415
-                    assign_picture_password,
-                )
+                from .utils.picture_passwords import are_picture_passwords_exhausted  # noqa: PLC0415
+                from .utils.picture_passwords import assign_picture_password  # noqa: PLC0415
 
                 if not are_picture_passwords_exhausted(user.dataset_id):
                     try:
@@ -1696,9 +1692,7 @@ class Facility(Collection):
         # if we don't yet have a dataset, create a new one for this facility
         if not self.dataset_id:
             # Cycle: device.models imports this module.
-            from kolibri.core.device.models import (  # noqa: PLC0415
-                DEFAULT_DEMOGRAPHIC_FIELDS_KEY,
-            )
+            from kolibri.core.device.models import DEFAULT_DEMOGRAPHIC_FIELDS_KEY  # noqa: PLC0415
 
             kwargs = {}
 

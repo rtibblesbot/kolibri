@@ -32,3 +32,13 @@ appId: org.learningequality.Kolibri
     timeout: 30000
 # Dismiss the modal so we leave the app in a clean state for follow-up flows.
 - tapOn: "CONTINUE"
+- tapOn: "Menu"
+- tapOn: "Device"
+- tapOn: "Channels"
+- extendedWaitUntil:
+    visible: "No channels installed"
+    timeout: 30000
+- back
+- extendedWaitUntil:
+    visible: "Learn"
+    timeout: 30000

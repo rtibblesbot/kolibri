@@ -68,6 +68,7 @@ storages = ["django-storages[google]==1.14.6; python_version >= '3.8'", "google-
 
 [dependency-groups]
 base = [
+    "pyqt5==5.15.11; python_version >= '3.8'",
     "diskcache==5.6.3",
     "django-csp==3.8",
     "django-filter==21.1",

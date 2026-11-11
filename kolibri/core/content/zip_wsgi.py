@@ -205,6 +205,14 @@ def parse_html(content):
         return content
 
 
+def _member_content_type(path):
+    content_type, encoding = mimetypes.guess_type(path)
+    return (
+        content_type or "application/octet-stream",
+        content_type == "text/html" and not encoding,
+    )
+
+
 def get_embedded_file(
     zipped_path, zipped_filename, embedded_filepath, range_header=None
 ):
@@ -221,13 +229,8 @@ def get_embedded_file(
                 f'"{embedded_filepath}" does not exist inside "{zipped_filename}"'
             )
 
-        # try to guess the MIME type of the embedded file being referenced
-        content_type = (
-            mimetypes.guess_type(embedded_filepath)[0] or "application/octet-stream"
-        )
+        content_type, is_html = _member_content_type(embedded_filepath)
         zipped_file_object = zf.open(info)
-
-        is_html = embedded_filepath.lower().endswith(("html", "htm"))
 
         if is_html:
             content = zipped_file_object.read()
@@ -322,11 +325,8 @@ def _zip_content_from_request(request):  # noqa: C901
 
     if request.method == "OPTIONS":
         response = HttpResponse()
-        # If path ends with html/htm, set Accept-Ranges to none
-        if embedded_filepath.lower().endswith(("html", "htm")):
-            response.headers["Accept-Ranges"] = "none"
-        else:
-            response.headers["Accept-Ranges"] = "bytes"
+        _, is_html = _member_content_type(embedded_filepath)
+        response.headers["Accept-Ranges"] = "none" if is_html else "bytes"
         return response
 
     try:

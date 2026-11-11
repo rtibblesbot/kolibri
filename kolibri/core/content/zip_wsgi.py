@@ -205,14 +205,6 @@ def parse_html(content):
         return content
 
 
-def _member_content_type(path):
-    content_type, encoding = mimetypes.guess_type(path)
-    return (
-        content_type or "application/octet-stream",
-        content_type == "text/html" and not encoding,
-    )
-
-
 def get_embedded_file(
     zipped_path, zipped_filename, embedded_filepath, range_header=None
 ):
@@ -229,8 +221,13 @@ def get_embedded_file(
                 f'"{embedded_filepath}" does not exist inside "{zipped_filename}"'
             )
 
-        content_type, is_html = _member_content_type(embedded_filepath)
+        # try to guess the MIME type of the embedded file being referenced
+        content_type = (
+            mimetypes.guess_type(embedded_filepath)[0] or "application/octet-stream"
+        )
         zipped_file_object = zf.open(info)
+
+        is_html = embedded_filepath.lower().endswith(("html", "htm"))
 
         if is_html:
             content = zipped_file_object.read()
@@ -325,8 +322,11 @@ def _zip_content_from_request(request):  # noqa: C901
 
     if request.method == "OPTIONS":
         response = HttpResponse()
-        _, is_html = _member_content_type(embedded_filepath)
-        response.headers["Accept-Ranges"] = "none" if is_html else "bytes"
+        # If path ends with html/htm, set Accept-Ranges to none
+        if embedded_filepath.lower().endswith(("html", "htm")):
+            response.headers["Accept-Ranges"] = "none"
+        else:
+            response.headers["Accept-Ranges"] = "bytes"
         return response
 
     try:
@@ -353,23 +353,6 @@ def _zip_content_from_request(request):  # noqa: C901
             return create_error_response(
                 f"{zipped_filename} is either not available on the remote {remote_baseurl}, or cannot be fetched"
             )
-
-    # Sometimes due to URL concatenation, we get URLs with double-slashes in them, like //path/to/file.html.
-    # the zipped_filename and embedded_filepath are defined by the regex capturing groups in the URL defined
-    # in urls.py in the same folder as this file:
-    # r"^zipcontent/(?P<zipped_filename>[^/]+)/(?P<embedded_filepath>.*)"
-    # If the embedded_filepath contains a leading slash because of an input URL like:
-    # /zipcontent/filename.zip//file.html
-    # then the embedded_filepath will have a value of "/file.html"
-    # we detect this leading slash in embedded_filepath and remove it.
-    if embedded_filepath.startswith("/"):
-        embedded_filepath = embedded_filepath[1:]
-    # Any double-slashes later in the URL will be present as double-slashes, such as:
-    # /zipcontent/filename.zip/path//file.html
-    # giving an embedded_filepath value of "path//file.html"
-    # Normalize the path by converting double-slashes occurring later in the path to a single slash.
-    # This would change our example embedded_filepath to "path/file.html" which will resolve properly.
-    embedded_filepath = embedded_filepath.replace("//", "/")
 
     # if client has a cached version, use that (we can safely assume nothing has changed, due to MD5)
     if request.META.get("HTTP_IF_MODIFIED_SINCE"):

@@ -20,25 +20,38 @@ const { facilities, hasMultipleFacilities, fetchFacilities, getFacility } = useF
 const { facilityConfig, signInOptions, picturePasswordSettings, fetchFacilityConfig } =
   useFacilityConfig(null);
 
+const _savedFacilityId = computed(() => {
+  // Previously chosen facility ID takes precedence
+  if (selectedFacilityId.value) {
+    return selectedFacilityId.value;
+  }
+  // Without a previously chosen facility, we cannot default to one if the device has multiple
+  if (hasMultipleFacilities.value) {
+    return null;
+  }
+  // Return the first facility's ID otherwise
+  return facilities.value[0]?.id || null;
+});
+
+const _facilityIdForThisVisit = ref(null);
+const _signInMethodForThisVisit = ref(null);
+
+function _endThisVisitsChoices() {
+  _facilityIdForThisVisit.value = null;
+  _signInMethodForThisVisit.value = null;
+}
+
 /**
- * The facility that should be activated for sign-in, either the previously selected or default
- * if there is only one facility
+ * The facility that should be activated for sign-in: the one set for this visit, else the saved
+ * one
  * @type {import('vue').WritableComputedRef<string|null>}
  */
 const facilityId = computed({
   get() {
-    // Previously chosen facility ID takes precedence
-    if (selectedFacilityId.value) {
-      return selectedFacilityId.value;
-    }
-    // Without a previously chosen facility, we cannot default to one if the device has multiple
-    if (hasMultipleFacilities.value) {
-      return null;
-    }
-    // Return the first facility's ID otherwise
-    return facilities.value[0]?.id || null;
+    return _facilityIdForThisVisit.value || _savedFacilityId.value;
   },
   set(value) {
+    _endThisVisitsChoices();
     setSelectedFacilityId(value);
   },
 });
@@ -132,6 +145,8 @@ const picturePasswordShowIconText = computed(() => {
   return picturePasswordSettings.value?.show_icon_text;
 });
 
+let _pendingOSUsername = null;
+
 /**
  * Set the active facility ID
  * @param {import('vue').Ref<string>|string} _facilityId - The facility ID to activate.
@@ -147,6 +162,10 @@ async function setFacilityId(_facilityId) {
 
   // Since things watch this, leave this til last
   facilityId.value = unref(_facilityId);
+}
+
+function saveFacilityId() {
+  setSelectedFacilityId(_savedFacilityId.value);
 }
 
 /**
@@ -165,14 +184,28 @@ async function initializeFlow(force = false) {
     handleApiError({ error, reloadOnReconnect: true });
   }
 
+  const osUser = await osUserRequest;
+  if (osUser && getFacility(osUser.facility)) {
+    _pendingOSUsername = osUser.username;
+    _facilityIdForThisVisit.value = osUser.facility;
+    _signInMethodForThisVisit.value = OptionsForSignIn.USERNAME_ONLY;
+  }
+
+  if (_facilityIdForThisVisit.value && !getFacility(_facilityIdForThisVisit.value)) {
+    _endThisVisitsChoices();
+  }
+
   if (!facilityId.value) return;
 
   // this could occur in development, or otherwise this could occur with a removed facility and/or
   // the persisted value hasn't been set yet
-  if (!selectedFacility.value || facilityId.value !== selectedFacilityId.value) {
+  if (
+    _savedFacilityId.value &&
+    (!getFacility(_savedFacilityId.value) || _savedFacilityId.value !== selectedFacilityId.value)
+  ) {
     // double check facility exists
-    const hasFacility = Boolean(getFacility(facilityId.value));
-    setSelectedFacilityId(hasFacility ? facilityId.value : null);
+    const hasFacility = Boolean(getFacility(_savedFacilityId.value));
+    setSelectedFacilityId(hasFacility ? _savedFacilityId.value : null);
   }
 
   try {
@@ -200,7 +233,9 @@ export default function useAuthFlow() {
     canSignUpWithFacility,
     picturePasswordStyle,
     picturePasswordShowIconText,
+    osUserFormOpened,
     initializeFlow,
     setFacilityId,
+    saveFacilityId,
   };
 }

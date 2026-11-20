@@ -178,7 +178,8 @@
         hasMultipleFacilities,
         selectedFacility,
         facilityConfig,
-        osUserFormOpened,
+        takeOSUsername,
+        saveFacilityId,
       } = useAuthFlow();
       const { watchForFacilityChange } = useAuthWatcher();
       useAuthPageTitle(pageTitleStrings.signInPageTitle$);
@@ -204,7 +205,7 @@
         selectedFacility,
         facilityConfig,
         hasMultipleFacilities,
-        osUserFormOpened,
+        takeOSUsername,
         nextParam,
         backToFacilitySelectionRoute,
       };
@@ -326,16 +327,8 @@
             }
           })
           .catch(() => {});
-        if (!this.osUserFormOpened) {
-          FacilityUsernameResource.osuser()
-            .then(({ username, facility }) => {
-              if (facility === this.selectedFacility.id && !this.username && !this.busy) {
-                this.osUserFormOpened = true;
-                this.setSelectedUsername(username);
-              }
-            })
-            .catch(() => {});
-        }
+        const osUsername = this.takeOSUsername();
+        if (osUsername) this.setSelectedUsername(osUsername);
       }
     },
     methods: {

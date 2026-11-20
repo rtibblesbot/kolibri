@@ -1,9 +1,11 @@
 import { computed, ref, unref } from 'vue';
 import { useLocalStorage, StorageSerializers } from '@vueuse/core';
 import { handleApiError } from 'kolibri/utils/appError';
+import useUser from 'kolibri/composables/useUser';
 import { OptionsForSignIn } from 'kolibri-common/constants/Auth';
 import useFacilities from 'kolibri-common/composables/useFacilities';
 import { useFacilitySelect, useFacilityConfig } from 'kolibri-common/composables/useFacility';
+import FacilityUsernameResource from '../apiResources/FacilityUsernameResource';
 
 /**
  * Global initialization state to prevent unnecessary repeated API calls. Having all the composables
@@ -78,6 +80,9 @@ const _persistentSignInMethod = useLocalStorage('signInMethod', null, {
  */
 const signInMethod = computed({
   get() {
+    if (_signInMethodForThisVisit.value) {
+      return _signInMethodForThisVisit.value;
+    }
     // Previously chosen sign-in method takes precedence if enabled
     if (
       _persistentSignInMethod.value &&
@@ -93,6 +98,7 @@ const signInMethod = computed({
     return signInOptions.value[0];
   },
   set(value) {
+    _signInMethodForThisVisit.value = null;
     // Persist the sign-in method for the user in local storage
     _persistentSignInMethod.value = value;
   },
@@ -147,6 +153,12 @@ const picturePasswordShowIconText = computed(() => {
 
 let _pendingOSUsername = null;
 
+function takeOSUsername() {
+  const username = _pendingOSUsername;
+  _pendingOSUsername = null;
+  return _facilityIdForThisVisit.value ? username : null;
+}
+
 /**
  * Set the active facility ID
  * @param {import('vue').Ref<string>|string} _facilityId - The facility ID to activate.
@@ -177,6 +189,11 @@ async function initializeFlow(force = false) {
   if (_initialized.value && !force) return;
 
   _initialized.value = true;
+
+  const osUserRequest =
+    !force && useUser().isAppContext.value
+      ? FacilityUsernameResource.osuser().catch(() => null)
+      : null;
 
   try {
     await fetchFacilities();
@@ -233,7 +250,7 @@ export default function useAuthFlow() {
     canSignUpWithFacility,
     picturePasswordStyle,
     picturePasswordShowIconText,
-    osUserFormOpened,
+    takeOSUsername,
     initializeFlow,
     setFacilityId,
     saveFacilityId,

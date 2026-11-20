@@ -113,6 +113,7 @@
         signInOptions,
         picturePasswordStyle,
         picturePasswordShowIconText,
+        saveFacilityId,
       } = useAuthFlow();
       const { watchForFacilityChange, watchForFacilityConfigChange } = useAuthWatcher();
       useAuthPageTitle(pageTitleStrings.pictureSignInPageTitle$);

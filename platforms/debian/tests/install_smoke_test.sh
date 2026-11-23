@@ -10,6 +10,7 @@
 #   EXPECT_BUNDLED     non-empty if postinst must install /opt/kolibri/python
 #   NO_SYSTEM_PYTHON   non-empty to install with no python3 at all
 #   UPGRADE_FROM_DEB   URL of an earlier .deb to install first, then upgrade
+#   NO_AMBIENT_CAPS    non-empty if the image's setpriv cannot raise ambient caps
 
 set -e
 
@@ -111,8 +112,12 @@ wait_for_kolibri() {
   exit 1
 }
 
+server_pid() {
+  (. /etc/default/kolibri && head -1 "$KOLIBRI_HOME/server.pid")
+}
+
 check_server_interpreter() {
-  exe=$(su -s /bin/sh "$KOLIBRI_USER" -c 'readlink "/proc/$(head -1 ~/.kolibri/server.pid)/exe"' || true)
+  exe=$(readlink "/proc/$(server_pid)/exe" || true)
   if [ -n "$EXPECT_BUNDLED" ]; then
     expected="/opt/kolibri/python/bin/python3.*"
   else
@@ -129,15 +134,39 @@ check_server_interpreter() {
   exit 1
 }
 
+check_server_privileges() {
+  status="/proc/$(server_pid)/status"
+  uid=$(id -u "$KOLIBRI_USER")
+  uids=$(awk '/^Uid:/ {print $2, $3, $4, $5}' "$status")
+  if [ "$uids" != "$uid $uid $uid $uid" ]; then
+    echo "FAIL: Kolibri server runs with real/effective/saved/fs uids $uids, expected $KOLIBRI_USER ($uid)"
+    exit 1
+  fi
+  echo "PASS: Kolibri server runs as $KOLIBRI_USER"
+  if [ -n "$NO_AMBIENT_CAPS" ]; then
+    echo "SKIP: setpriv on this image cannot raise ambient capabilities"
+    return
+  fi
+  cap_amb=$(awk '/^CapAmb:/ {print $2}' "$status")
+  # Bit 10 is CAP_NET_BIND_SERVICE in linux/capability.h
+  if (( (0x$cap_amb >> 10) & 1 )); then
+    echo "PASS: Kolibri server holds CAP_NET_BIND_SERVICE as an ambient capability"
+  else
+    echo "FAIL: Kolibri server lacks ambient CAP_NET_BIND_SERVICE (CapAmb: $cap_amb)"
+    exit 1
+  fi
+}
+
 KOLIBRI_USER=$(cat /etc/kolibri/username 2>/dev/null || echo "kolibri")
 
 check_interpreter
 check_kolibri_cli
 
-su -s /bin/sh "$KOLIBRI_USER" -c "kolibri stop" 2>/dev/null || true
-su -s /bin/sh "$KOLIBRI_USER" -c "kolibri start"
+/etc/init.d/kolibri stop 2>/dev/null || true
+/etc/init.d/kolibri start
 wait_for_kolibri
 check_server_interpreter
+check_server_privileges
 
 # Containers run no service manager; stand in for systemd, which runs
 # kolibri.service's ExecStart/ExecStop, i.e. the init script.
@@ -165,6 +194,7 @@ if [ -n "$EXPECT_BUNDLED" ]; then
 fi
 wait_for_kolibri
 check_server_interpreter
+check_server_privileges
 
 dpkg --purge kolibri
 if [ -e /opt/kolibri ]; then

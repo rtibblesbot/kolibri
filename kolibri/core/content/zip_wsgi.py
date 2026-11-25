@@ -354,6 +354,23 @@ def _zip_content_from_request(request):  # noqa: C901
                 f"{zipped_filename} is either not available on the remote {remote_baseurl}, or cannot be fetched"
             )
 
+    # Sometimes due to URL concatenation, we get URLs with double-slashes in them, like //path/to/file.html.
+    # the zipped_filename and embedded_filepath are defined by the regex capturing groups in the URL defined
+    # in urls.py in the same folder as this file:
+    # r"^zipcontent/(?P<zipped_filename>[^/]+)/(?P<embedded_filepath>.*)"
+    # If the embedded_filepath contains a leading slash because of an input URL like:
+    # /zipcontent/filename.zip//file.html
+    # then the embedded_filepath will have a value of "/file.html"
+    # we detect this leading slash in embedded_filepath and remove it.
+    if embedded_filepath.startswith("/"):
+        embedded_filepath = embedded_filepath[1:]
+    # Any double-slashes later in the URL will be present as double-slashes, such as:
+    # /zipcontent/filename.zip/path//file.html
+    # giving an embedded_filepath value of "path//file.html"
+    # Normalize the path by converting double-slashes occurring later in the path to a single slash.
+    # This would change our example embedded_filepath to "path/file.html" which will resolve properly.
+    embedded_filepath = embedded_filepath.replace("//", "/")
+
     # if client has a cached version, use that (we can safely assume nothing has changed, due to MD5)
     if request.META.get("HTTP_IF_MODIFIED_SINCE"):
         return HttpResponseNotModified()

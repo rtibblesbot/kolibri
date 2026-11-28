@@ -36,6 +36,7 @@ module.exports = {
     'node_modules/(?!(\\.pnpm/kolibri|kolibri))',
   ],
   snapshotSerializers: ['jest-serializer-vue'],
+  setupFiles: [path.resolve(__dirname, './pluginData.fixture')],
   setupFilesAfterEnv: [path.resolve(__dirname, './setup')],
   coverageDirectory: '<rootDir>/coverage',
   verbose: false,
